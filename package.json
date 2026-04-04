@@ -1,0 +1,44 @@
+{
+  "name": "opencams",
+  "version": "1.0.0",
+  "description": "Professional multi-camera RTSP stream manager.",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --inspect",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "electron",
+    "rtsp",
+    "camera",
+    "nvr",
+    "surveillance"
+  ],
+  "author": "Jaccon Lab",
+  "license": "MIT",
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "uuid": "^9.0.0"
+  },
+  "build": {
+    "appId": "com.jaccon.rtsp-manager",
+    "productName": "RTSP Camera Manager",
+    "icon": "assets/images/icon.png",
+    "mac": {
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

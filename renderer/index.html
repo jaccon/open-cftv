@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:;" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenCams — RTSP Stream Manager</title>
+  <meta name="description" content="Professional multi-camera RTSP stream manager built with Electron." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="styles/main.css" />
+</head>
+
+<body>
+  <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar" role="complementary" aria-label="Navigation sidebar">
+    <div class="sidebar__brand">
+      <img src="../assets/images/logotipos.svg" alt="OpenCFTV" class="sidebar__logo-img" />
+    </div>
+
+    <!-- Server Status Widget -->
+    <div class="sidebar__server-widget" id="server-widget">
+      <div class="server-status">
+        <div class="server-status__header">
+          <span class="server-status__label">WEB SERVER</span>
+          <label class="toggle-label toggle-label--mini">
+            <input type="checkbox" id="server-toggle" role="switch" />
+            <span class="toggle"></span>
+          </label>
+        </div>
+        <div class="server-status__url" id="server-url">Off-line</div>
+      </div>
+    </div>
+
+    <nav class="sidebar__nav" role="navigation" aria-label="Main navigation">
+      <button class="nav-item nav-item--active" id="nav-grid" data-view="grid" aria-label="Camera grid view"
+        aria-current="page">
+        <svg class="nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+        <span>Camera Grid</span>
+      </button>
+
+      <button class="nav-item" id="nav-cameras" data-view="cameras" aria-label="Camera list view">
+        <svg class="nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 7l-7 5 7 5V7z" />
+          <rect x="1" y="5" width="15" height="14" rx="2" />
+        </svg>
+        <span>Cameras</span>
+      </button>
+
+      <button class="nav-item" id="nav-settings" data-view="settings" aria-label="Settings view">
+        <svg class="nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+        </svg>
+        <span>Settings</span>
+      </button>
+
+      <button class="nav-item" id="nav-probe" data-view="probe" aria-label="Probe camera network">
+        <svg class="nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8" />
+          <path d="M21 21l-4.35-4.35M11 8v6M8 11h6" />
+        </svg>
+        <span>Probe Camera</span>
+      </button>
+    </nav>
+
+    <div class="sidebar__stats">
+      <div class="stat-chip">
+        <span class="stat-chip__dot stat-chip__dot--green"></span>
+        <span id="stat-online">0 online</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-chip__dot stat-chip__dot--gray"></span>
+        <span id="stat-total">0 total</span>
+      </div>
+    </div>
+
+    <footer class="sidebar__footer">
+      <span>developed by Jaccon</span>
+    </footer>
+  </aside>
+
+  <!-- ── Main Content ───────────────────────────────────────────────────── -->
+  <main class="main-content" role="main">
+    <!-- Topbar -->
+    <header class="topbar" role="banner">
+      <div class="topbar__left">
+        <h1 class="topbar__title" id="view-title">Camera Grid</h1>
+        <span class="topbar__subtitle" id="view-subtitle">Live View</span>
+      </div>
+      <div class="topbar__right">
+        <div class="grid-controls" id="grid-controls">
+          <button class="icon-btn" id="btn-grid-1" aria-label="1 column">1×1</button>
+          <button class="icon-btn icon-btn--active" id="btn-grid-2" aria-label="2 columns">2×2</button>
+          <button class="icon-btn" id="btn-grid-3" aria-label="3 columns">3×3</button>
+          <button class="icon-btn" id="btn-grid-4" aria-label="4 columns">4×4</button>
+        </div>
+        <button class="btn btn--primary" id="btn-add-camera" aria-label="Add camera" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Add Camera
+        </button>
+      </div>
+    </header>
+
+    <!-- ── Views ───────────────────────────────────────────────────────── -->
+
+    <!-- Grid View -->
+    <section class="view" id="view-grid" aria-label="Camera grid" role="region">
+      <div class="camera-grid" id="camera-grid" role="grid">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-state__icon" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none">
+              <rect x="4" y="12" width="44" height="32" rx="4" stroke="currentColor" stroke-width="2" />
+              <path d="M48 22l12-8v28l-12-8V22z" stroke="currentColor" stroke-width="2" />
+              <circle cx="26" cy="28" r="8" stroke="currentColor" stroke-width="2" />
+            </svg>
+          </div>
+          <h2 class="empty-state__title">No cameras configured</h2>
+          <p class="empty-state__desc">Add your first RTSP camera to start monitoring</p>
+          <button class="btn btn--primary" id="btn-empty-add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Add Camera
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Camera List View -->
+    <section class="view view--hidden" id="view-cameras" aria-label="Camera list" role="region">
+      <div class="camera-list" id="camera-list" role="list"></div>
+    </section>
+
+    <!-- Settings View -->
+    <section class="view view--hidden" id="view-settings" aria-label="Settings" role="region">
+      <div class="settings-panel">
+        <div class="settings-group">
+          <h2 class="settings-group__title">Display</h2>
+          <div class="setting-row">
+            <label class="setting-label" for="setting-columns">Default Grid Columns</label>
+            <select class="input" id="setting-columns">
+              <option value="1">1 Column</option>
+              <option value="2" selected>2 Columns</option>
+              <option value="3">3 Columns</option>
+              <option value="4">4 Columns</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-group">
+          <h2 class="settings-group__title">Storage</h2>
+          <div class="setting-row">
+            <label class="setting-label" for="setting-snapdir">Snapshot Directory</label>
+            <div class="input-with-btn">
+              <input class="input" id="setting-snapdir" type="text" placeholder="~/Pictures/RTSPManager" readonly />
+              <button class="btn btn--secondary" id="btn-snapdir">Browse</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <div class="settings-group">
+        <h2 class="settings-group__title">Web Server</h2>
+        <div class="setting-row">
+          <label class="setting-label" for="setting-server-port">Server Port</label>
+          <input class="input" id="setting-server-port" type="number" value="2323" placeholder="2323" min="1024"
+            max="65535" />
+        </div>
+        <div class="setting-row">
+          <label class="toggle-label">
+            <input type="checkbox" id="setting-server-auto" role="switch" />
+            <span class="toggle"></span>
+            <span>Start server on application launch</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <h2 class="settings-group__title">Backup & Restore</h2>
+        <div class="setting-row">
+          <p class="settings-about">Manage your camera configurations and app settings.</p>
+          <div class="probe-actions" style="margin-top: var(--space-4);">
+            <button class="btn btn--secondary" id="btn-export-settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              Export Settings
+            </button>
+            <button class="btn btn--secondary" id="btn-import-settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              Import Settings
+            </button>
+            <button class="btn btn--danger" id="btn-reset-settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              Reset Configurations
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <h2 class="settings-group__title">About</h2>
+        <p class="settings-about">RTSP Camera Manager v1.0.0 &mdash; Built with Electron &amp; FFmpeg</p>
+      </div>
+      <button class="btn btn--primary" id="btn-save-settings">Save Settings</button>
+      </div>
+    </section>
+
+    <!-- Probe Camera View -->
+    <section class="view view--hidden" id="view-probe" aria-label="Probe Camera" role="region">
+      <div class="probe-panel">
+
+        <!-- Controls bar -->
+        <div class="probe-controls">
+          <div class="probe-subnet-group">
+            <label class="form-label" for="probe-subnet">Subnet to scan</label>
+            <div class="probe-subnet-input">
+              <input class="input input--mono" id="probe-subnet" type="text" placeholder="192.168.1" maxlength="15" />
+              <span class="probe-subnet-suffix">.1 – .254</span>
+            </div>
+          </div>
+          <div class="probe-actions">
+            <button class="btn btn--primary" id="btn-probe-start">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+              Scan Network
+            </button>
+            <button class="btn btn--secondary" id="btn-probe-cancel" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- Progress -->
+        <div class="probe-progress-wrap" id="probe-progress-wrap" hidden>
+          <div class="probe-progress-header">
+            <span class="probe-phase" id="probe-phase">Scanning…</span>
+            <span class="probe-pct" id="probe-pct">0%</span>
+          </div>
+          <div class="probe-progress-bar" id="probe-progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+            <div class="probe-progress-fill" id="probe-progress-fill"></div>
+          </div>
+          <div class="probe-progress-log" id="probe-progress-log" aria-live="polite"></div>
+        </div>
+
+        <!-- Stats row -->
+        <div class="probe-stats-row" id="probe-stats-row" hidden>
+          <div class="probe-stat-card">
+            <span class="probe-stat-value" id="probe-stat-scanned">0</span>
+            <span class="probe-stat-label">Hosts Scanned</span>
+          </div>
+          <div class="probe-stat-card">
+            <span class="probe-stat-value" id="probe-stat-open">0</span>
+            <span class="probe-stat-label">Port 554 Open</span>
+          </div>
+          <div class="probe-stat-card">
+            <span class="probe-stat-value" id="probe-stat-found">0</span>
+            <span class="probe-stat-label">RTSP Paths Found</span>
+          </div>
+          <div class="probe-stat-card">
+            <span class="probe-stat-value" id="probe-stat-added">0</span>
+            <span class="probe-stat-label">Added to Manager</span>
+          </div>
+        </div>
+
+        <!-- Results table -->
+        <div class="probe-results" id="probe-results" hidden>
+          <div class="probe-results-header">
+            <h3 class="probe-results-title">Discovered Cameras</h3>
+            <button class="btn btn--secondary" id="btn-probe-add-all" style="font-size:0.75rem;padding:4px 12px;">
+              Add All
+            </button>
+          </div>
+          <div class="probe-table-wrap">
+            <table class="probe-table" role="grid" aria-label="Discovered RTSP cameras">
+              <thead>
+                <tr>
+                  <th>IP Address</th>
+                  <th>RTSP URL</th>
+                  <th>Latency</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="probe-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div class="probe-empty" id="probe-empty">
+          <div class="probe-empty__icon" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none">
+              <circle cx="32" cy="32" r="28" stroke="currentColor" stroke-width="2" />
+              <circle cx="32" cy="32" r="18" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3" />
+              <circle cx="32" cy="32" r="8" stroke="currentColor" stroke-width="1.5" />
+              <circle cx="32" cy="32" r="2" fill="currentColor" />
+            </svg>
+          </div>
+          <p class="probe-empty__text">Enter a subnet and click <strong>Scan Network</strong> to discover RTSP cameras
+          </p>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Modal: Add / Edit Camera ───────────────────────────────────────── -->
+  <div class="modal-backdrop" id="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal" role="document">
+      <header class="modal__header">
+        <h2 class="modal__title" id="modal-title">Add Camera</h2>
+        <button class="icon-btn" id="modal-close" aria-label="Close dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </header>
+
+      <form class="modal__body" id="camera-form" novalidate>
+        <input type="hidden" id="field-id" />
+
+        <div class="form-row form-row--2col">
+          <div class="form-group">
+            <label class="form-label" for="field-name">Camera Name <span class="required">*</span></label>
+            <input class="input" id="field-name" type="text" placeholder="Front Door" required autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="field-group">Group</label>
+            <input class="input" id="field-group" type="text" placeholder="Default" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="field-rtsp">RTSP URL <span class="required">*</span></label>
+          <input class="input input--mono" id="field-rtsp" type="text" placeholder="rtsp://192.168.1.100:554/stream1"
+            required autocomplete="off" />
+        </div>
+
+        <div class="form-row form-row--2col">
+          <div class="form-group">
+            <label class="form-label" for="field-username">Username</label>
+            <input class="input" id="field-username" type="text" placeholder="admin" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="field-password">Password</label>
+            <input class="input" id="field-password" type="password" placeholder="••••••••"
+              autocomplete="new-password" />
+          </div>
+        </div>
+
+        <div class="form-row form-row--2col">
+          <div class="form-group">
+            <label class="form-label" for="field-transport">Transport</label>
+            <select class="input" id="field-transport">
+              <option value="tcp">TCP (recommended)</option>
+              <option value="udp">UDP</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="field-reconnect">Reconnect (seconds)</label>
+            <input class="input" id="field-reconnect" type="number" min="1" max="60" value="5" />
+          </div>
+        </div>
+
+        <div class="form-row form-row--2col">
+          <div class="form-group">
+            <label class="toggle-label">
+              <input type="checkbox" id="field-enabled" checked role="switch" />
+              <span class="toggle"></span>
+              <span>Enable on startup</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="toggle-label">
+              <input type="checkbox" id="field-audio" role="switch" />
+              <span class="toggle"></span>
+              <span>Enable Audio (Listen)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-error" id="form-error" aria-live="polite" hidden></div>
+
+        <footer class="modal__footer">
+          <button type="button" class="btn btn--ghost" id="modal-cancel">Cancel</button>
+          <button type="submit" class="btn btn--primary" id="modal-submit">Add Camera</button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Toast ─────────────────────────────────────────────────────────── -->
+  <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="scripts/app.js"></script>
+</body>
+
+</html>

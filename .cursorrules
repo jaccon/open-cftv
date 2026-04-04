@@ -1,0 +1,31 @@
+# Instructions for AI Coding Agents (Cursor, Claude Code, Antigravity)
+
+Este repositório utiliza **Spec-Driven Development (SDD)**. Todas as mudanças funcionais, estruturais ou de estilo devem respeitar as especificações centralizadas.
+
+## 1. Fontes de Verdade (Leitura Obrigatória)
+Antes de qualquer alteração, leia e compreenda:
+- **`CLAUDE.md`**: Diretrizes gerais e comandos.
+- **`documentations/PROJECT_SPEC.md`**: O que o app deve fazer.
+- **`documentations/ARCHITECTURE_SPEC.md`**: Como os componentes se comunicam.
+
+## 2. Padrões de Código (Style Guide)
+- **Framework**: Electron (Main/Renderer separation).
+- **Linguagem**: JavaScript moderno (ES6+), sem frameworks pesados no renderer (Vanilla JS prioritário).
+- **Estilo**: 2 espaços para indentação, ';' obrigatório, prefixos de log (ex: `[Main]`, `[StreamService]`).
+- **Segurança**: Nunca exponha segredos ou habilite `nodeIntegration` no Renderer.
+
+## 3. Workflow de Mudança (SDD Workflow)
+1. **Analise**: Leia o código existente e a spec relacionada em `documentations/`.
+2. **Atualize a Spec**: Se a mudança for funcional ou técnica, atualize primeiro o `.md` correspondente.
+3. **Implemente**: Siga rigorosamente a arquitetura definida (Contratos IPC em `ARCHITECTURE_SPEC.md`).
+4. **Build**: Sempre verifique o build (`npm run build`) após mudanças que afetem o empacotamento ou ícones.
+
+## 4. Design & UX
+- Siga as variáveis de tokens em `renderer/styles/main.css`.
+- Use a estética **Glassmorphism** e cores harmoniosas (Inspirado no Jaccon Lab Style).
+- Ícones e logotipos devem estar em `assets/images/`.
+
+## 5. Comandos Rápidos
+- `npm run dev`: Iniciar ambiente de desenvolvimento.
+- `npm run build`: Gerar binários de produção.
+- `npm run rebuild`: Compilar dependências nativas (better-sqlite3).
