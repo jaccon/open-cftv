@@ -2,7 +2,9 @@
 
 ![Logo](assets/images/logotipos.svg)
 
-**OpenCams** é um gerenciador de streams de vídeo RTSP profissional, leve e extensível, construído com **Electron**, **Node.js** e **FFmpeg**. Projetado para monitoramento de múltiplas câmeras simultâneas, ele oferece uma interface moderna e recursos avançados para profissionais de CFTV.
+[![Screenshot](assets/screenshot.png)](assets/screenshot.png)
+
+**OpenCams** é um gerenciador de streams de vídeo RTSP profissional e **Universal** (compatível com **qualquer marca e modelo de câmera**), leve e extensível, construído com **Electron**, **Node.js** e **FFmpeg**. Projetado para monitoramento de múltiplas câmeras simultâneas, ele oferece uma interface moderna e recursos avançados para profissionais de CFTV.
 
 ## 🚀 Principais Recursos
 - **Grid de Câmeras Dinâmico**: Visualize múltiplas câmeras em layouts customizáveis (1x1 a 4x4).
