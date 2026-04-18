@@ -6,7 +6,11 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
+let FFMPEG_PATH = require('ffmpeg-static');
+if (FFMPEG_PATH && FFMPEG_PATH.includes('app.asar')) {
+  FFMPEG_PATH = FFMPEG_PATH.replace('app.asar', 'app.asar.unpacked');
+}
+FFMPEG_PATH = process.env.FFMPEG_PATH || FFMPEG_PATH;
 const SNAPSHOT_DIR = path.join(os.tmpdir(), 'rtsp-manager-snapshots');
 
 /**
@@ -52,6 +56,7 @@ class StreamService extends EventEmitter {
       status: 'connecting',
       startedAt: Date.now(),
       frames: 0,
+      logs: [],
       lastError: null,
       reconnectTimer: null,
     };
@@ -109,6 +114,17 @@ class StreamService extends EventEmitter {
   }
 
   /**
+   * Returns up to 100 recent log lines for a stream
+   * @param {string} cameraId
+   * @returns {string[]}
+   */
+  getLogs(cameraId) {
+    const session = this._sessions.get(cameraId);
+    if (!session) return [];
+    return session.logs || [];
+  }
+
+  /**
    * Captures a single JPEG snapshot from the RTSP stream.
    * @param {import('./cameraService').Camera} camera
    * @returns {Promise<string>} base64-encoded JPEG
@@ -117,7 +133,7 @@ class StreamService extends EventEmitter {
     return new Promise((resolve, reject) => {
       const outPath = path.join(SNAPSHOT_DIR, `${camera.id}_${Date.now()}.jpg`);
       const url = this._buildRtspUrl(camera);
-      const inputArgs = this._buildInputArgs(camera.transport || 'tcp');
+      const inputArgs = this._buildInputArgs(camera);
       const args = [
         ...inputArgs,
         '-i', url,
@@ -161,7 +177,7 @@ class StreamService extends EventEmitter {
     const url = this._buildRtspUrl(camera);
     const transport = camera.transport || 'tcp';
     const codec = camera.codec || 'auto';
-    const inputArgs = this._buildInputArgs(transport, codec);
+    const inputArgs = this._buildInputArgs(camera);
 
     const args = [
       '-loglevel', 'warning',
@@ -223,12 +239,25 @@ class StreamService extends EventEmitter {
     });
 
     proc.stderr.on('data', (data) => {
-      const msg = data.toString().trim();
-      if (!msg) return;
-      session.lastError = msg.slice(-300);
-      console.warn(`[StreamService][${camera.id}] FFmpeg: ${msg}`);
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('stream:error', camera.id, session.lastError);
+      const msgs = data.toString().trim().split('\n');
+      let latestMsg = '';
+      msgs.forEach(m => {
+        if (m) {
+          console.log(`[StreamService][${camera.id}] FFmpeg: ${m}`);
+          latestMsg = m;
+        }
+      });
+      // push to session logs
+      if (session.logs) {
+        session.logs.push(...msgs.filter(m => m));
+        if (session.logs.length > 100) session.logs = session.logs.slice(-100);
+      }
+      
+      if (latestMsg) {
+        session.lastError = latestMsg.slice(-300);
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('stream:error', camera.id, session.lastError);
+        }
       }
     });
 
@@ -252,26 +281,28 @@ class StreamService extends EventEmitter {
   /**
    * Builds FFmpeg input flags based on transport protocol.
    * UDP streams need extra buffer/delay settings for HEVC.
-   * @param {'tcp'|'udp'} transport
+   * @param {import('./cameraService').Camera} camera
    * @returns {string[]}
    * @private
    */
-  _buildInputArgs(transport, codec) {
+  _buildInputArgs(camera) {
+    const transport = camera.transport || 'tcp';
     const base = [
       '-rtsp_transport', transport,
       '-allowed_media_types', 'video',
-      '-probesize', '32768',          // probe 32KB (faster stream start)
-      '-analyzeduration', '500000',   // 0.5s analysis window
+      '-probesize', '5000000',        // probe 5MB (better for high-res H264/H265)
+      '-analyzeduration', '2000000',  // 2s analysis window
     ];
 
     if (transport === 'udp') {
+      const bufferSize = camera.udpBufferSize || 10485760;
       return [
         ...base,
-        '-buffer_size', '2048000',  // 2MB UDP receive buffer
-        '-max_delay', '500000',   // 500ms max PTS delay
+        '-buffer_size', bufferSize.toString(),  // configurable UDP receive buffer
+        '-max_delay', '1000000',     // 1s max PTS delay to allow packet reordering
         '-fflags', '+genpts+discardcorrupt',
         '-err_detect', 'ignore_err',
-        '-skip_frame', 'noref',    // recover from corrupted ref frames (H.264 UDP)
+        '-skip_frame', 'noref',      // recover from corrupted ref frames
       ];
     }
 

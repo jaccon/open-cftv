@@ -14,6 +14,40 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="styles/main.css" />
+  <style>
+    .camera-card__ptz-controls {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      border-radius: 8px;
+      padding: 4px;
+      z-index: 15;
+    }
+    .camera-card__ptz-controls.visible {
+      display: flex;
+    }
+    .ptz-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: white;
+      width: 24px;
+      height: 24px;
+      margin: 2px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+    .ptz-btn:hover { background: rgba(255,255,255,0.2); }
+    .ptz-btn:active { background: var(--clr-primary); }
+  </style>
 </head>
 
 <body>
@@ -72,6 +106,13 @@
           <path d="M21 21l-4.35-4.35M11 8v6M8 11h6" />
         </svg>
         <span>Probe Camera</span>
+      </button>
+
+      <button class="nav-item" id="nav-logs" data-view="logs" aria-label="Logs view">
+        <svg class="nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line>
+        </svg>
+        <span>Logs</span>
       </button>
     </nav>
 
@@ -211,6 +252,15 @@
       </div>
 
       <div class="settings-group">
+        <h2 class="settings-group__title">FFmpeg Engine</h2>
+        <div class="setting-row">
+          <label class="setting-label" for="setting-udp-buffer">UDP Buffer Size (Bytes)</label>
+          <input class="input" id="setting-udp-buffer" type="number" value="10485760" step="1024" />
+          <p class="settings-about" style="display:block; margin-top:4px;">Max buffer size for UDP RTSP connections. Lower this value if you hit OS cache limits.</p>
+        </div>
+      </div>
+
+      <div class="settings-group">
         <h2 class="settings-group__title">About</h2>
         <p class="settings-about">RTSP Camera Manager v1.0.0 &mdash; Built with Electron &amp; FFmpeg</p>
       </div>
@@ -319,6 +369,22 @@
 
       </div>
     </section>
+
+    <!-- Logs View -->
+    <section class="view view--hidden" id="view-logs" aria-label="Console Logs" role="region">
+      <div class="settings-group" style="height: 100%; display: flex; flex-direction: column;">
+        <h2 class="settings-group__title">Stream Logs</h2>
+        <div class="form-group" style="max-width: 320px;">
+          <label class="form-label" for="logs-camera-select">Select Camera</label>
+          <select class="input" id="logs-camera-select">
+            <option value="" disabled selected>Select a camera</option>
+          </select>
+        </div>
+        <div style="background:#0a0a0c; padding:16px; margin-top:16px; border-radius: 8px; flex: 1; display:flex; flex-direction:column; border: 1px solid var(--clr-border); overflow: hidden;">
+          <pre id="logs-page-output" style="font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color:#a0a0b0; white-space: pre-wrap; word-wrap: break-word; flex:1; margin:0; overflow-y: auto;"></pre>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- ── Modal: Add / Edit Camera ───────────────────────────────────────── -->
@@ -396,6 +462,16 @@
           </div>
         </div>
 
+        <div class="form-row form-row--2col">
+          <div class="form-group">
+            <label class="toggle-label">
+              <input type="checkbox" id="field-ptz" role="switch" />
+              <span class="toggle"></span>
+              <span>Enable PTZ Controls</span>
+            </label>
+          </div>
+        </div>
+
         <div class="form-error" id="form-error" aria-live="polite" hidden></div>
 
         <footer class="modal__footer">
@@ -403,9 +479,6 @@
           <button type="submit" class="btn btn--primary" id="modal-submit">Add Camera</button>
         </footer>
       </form>
-    </div>
-  </div>
-
   <!-- ── Toast ─────────────────────────────────────────────────────────── -->
   <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
 

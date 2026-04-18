@@ -34,6 +34,10 @@ class DatabaseService {
       )
     `);
 
+    // Schema migrations for existing databases
+    try { this.db.exec(`ALTER TABLE cameras ADD COLUMN audio_enabled INTEGER DEFAULT 0`); } catch (err) {}
+    try { this.db.exec(`ALTER TABLE cameras ADD COLUMN ptz_enabled INTEGER DEFAULT 0`); } catch (err) {}
+
     // Settings table (key-value store)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS settings (
@@ -74,14 +78,16 @@ class DatabaseService {
       transport: row.transport,
       codec: row.codec,
       reconnectInterval: row.reconnect_interval,
-      enabled: row.enabled === 1
+      enabled: row.enabled === 1,
+      audioEnabled: row.audio_enabled === 1,
+      ptzEnabled: row.ptz_enabled === 1
     }));
   }
 
   saveCamera(camera) {
     const upsert = this.db.prepare(`
-      INSERT INTO cameras (id, name, group_name, rtsp_url, username, password, transport, codec, reconnect_interval, enabled)
-      VALUES (@id, @name, @group, @rtspUrl, @username, @password, @transport, @codec, @reconnectInterval, @enabled)
+      INSERT INTO cameras (id, name, group_name, rtsp_url, username, password, transport, codec, reconnect_interval, enabled, audio_enabled, ptz_enabled)
+      VALUES (@id, @name, @group, @rtspUrl, @username, @password, @transport, @codec, @reconnectInterval, @enabled, @audioEnabled, @ptzEnabled)
       ON CONFLICT(id) DO UPDATE SET
         name=excluded.name,
         group_name=excluded.group_name,
@@ -91,9 +97,16 @@ class DatabaseService {
         transport=excluded.transport,
         codec=excluded.codec,
         reconnect_interval=excluded.reconnect_interval,
-        enabled=excluded.enabled
+        enabled=excluded.enabled,
+        audio_enabled=excluded.audio_enabled,
+        ptz_enabled=excluded.ptz_enabled
     `);
-    upsert.run({ ...camera, enabled: camera.enabled ? 1 : 0 });
+    upsert.run({ 
+      ...camera, 
+      enabled: camera.enabled ? 1 : 0,
+      audioEnabled: camera.audioEnabled ? 1 : 0,
+      ptzEnabled: camera.ptzEnabled ? 1 : 0
+    });
   }
 
   deleteCamera(id) {

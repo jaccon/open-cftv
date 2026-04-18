@@ -57,6 +57,11 @@ const el = {
   modalCancel: $('modal-cancel'),
   cameraForm: $('camera-form'),
   formError: $('form-error'),
+  // Logs View
+  navLogs: $('nav-logs'),
+  viewLogs: $('view-logs'),
+  logsCameraSelect: $('logs-camera-select'),
+  logsPageOutput: $('logs-page-output'),
   // Form fields
   fieldId: $('field-id'),
   fieldName: $('field-name'),
@@ -68,6 +73,7 @@ const el = {
   fieldReconnect: $('field-reconnect'),
   fieldEnabled: $('field-enabled'),
   fieldAudio: $('field-audio'),
+  fieldPtz: $('field-ptz'),
   // Settings
   settingColumns: $('setting-columns'),
   settingSnapdir: $('setting-snapdir'),
@@ -110,6 +116,13 @@ const navController = {
       subtitle: 'Discover RTSP Cameras on Local Network',
       showGridControls: false,
     },
+    logs: {
+      view: () => el.viewLogs,
+      nav: () => el.navLogs,
+      title: 'Stream Logs',
+      subtitle: 'Debug FFmpeg streaming issues',
+      showGridControls: false,
+    },
   },
 
   navigate(viewName) {
@@ -119,9 +132,11 @@ const navController = {
     Object.entries(this.views).forEach(([name, cfg]) => {
       const isActive = name === viewName;
       cfg.view().classList.toggle('view--hidden', !isActive);
-      cfg.nav().classList.toggle('nav-item--active', isActive);
-      if (isActive) cfg.nav().setAttribute('aria-current', 'page');
-      else cfg.nav().removeAttribute('aria-current');
+      if (cfg.nav) {
+        cfg.nav().classList.toggle('nav-item--active', isActive);
+        if (isActive) cfg.nav().setAttribute('aria-current', 'page');
+        else cfg.nav().removeAttribute('aria-current');
+      }
     });
 
     const cfg = this.views[viewName];
@@ -132,6 +147,8 @@ const navController = {
     if (viewName === 'cameras') cameraListUI.render();
     if (viewName === 'settings') settingsController.load();
     if (viewName === 'probe') probeController.refreshSubnet();
+    if (viewName === 'logs') logsController.onViewDidAppear();
+    else logsController.onViewDidDisappear();
   },
 
   init() {
@@ -139,6 +156,7 @@ const navController = {
     el.navCameras.addEventListener('click', () => this.navigate('cameras'));
     el.navSettings.addEventListener('click', () => this.navigate('settings'));
     el.navProbe.addEventListener('click', () => this.navigate('probe'));
+    el.navLogs.addEventListener('click', () => this.navigate('logs'));
     this.navigate('grid');
   },
 };
@@ -282,7 +300,18 @@ const cameraGridUI = {
           <span>${this._statusLabel(status)}</span>
         </div>
         <div class="camera-card__fps" data-camera-fps="${camera.id}"></div>
+        <div class="camera-card__ptz-controls ${camera.ptzEnabled ? 'visible' : ''}" data-camera-ptz="${camera.id}">
+          <button class="ptz-btn" data-action="ptz-up" data-id="${camera.id}" aria-label="PTZ Up">▲</button>
+          <div style="display:flex;">
+            <button class="ptz-btn" data-action="ptz-left" data-id="${camera.id}" aria-label="PTZ Left">◀</button>
+            <button class="ptz-btn" data-action="ptz-right" data-id="${camera.id}" aria-label="PTZ Right">▶</button>
+          </div>
+          <button class="ptz-btn" data-action="ptz-down" data-id="${camera.id}" aria-label="PTZ Down">▼</button>
+        </div>
         <div class="camera-card__actions">
+          <button class="icon-btn" title="View Logs" data-action="logs" data-id="${camera.id}" aria-label="View Logs">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+          </button>
           <button class="icon-btn" title="Snapshot" data-action="snapshot" data-id="${camera.id}" aria-label="Take snapshot">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
           </button>
@@ -316,8 +345,33 @@ const cameraGridUI = {
       if (action === 'start') streamManager.startStream(id);
       else if (action === 'stop') streamManager.stopStream(id);
       else if (action === 'snapshot') streamManager.takeSnapshot(id);
+      else if (action === 'logs') logsController.open(id);
       else if (action === 'edit') modalController.open(id);
       else if (action === 'listen') listenController.toggleListen(id);
+    });
+
+    // PTZ continuous movement bindings
+    card.addEventListener('mousedown', (e) => {
+      const btn = e.target.closest('[data-action^="ptz-"]');
+      if (!btn) return;
+      const id = btn.dataset.id;
+      const dir = btn.dataset.action.split('-')[1]; // "up", "down", "left", "right"
+      window.api.ptz.move(id, dir).catch(() => toast.error('PTZ Move Failed'));
+    });
+
+    card.addEventListener('mouseup', (e) => {
+      const btn = e.target.closest('[data-action^="ptz-"]');
+      if (!btn) return;
+      const id = btn.dataset.id;
+      window.api.ptz.stop(id).catch(() => {});
+    });
+    card.addEventListener('mouseleave', (e) => {
+      // If mouse leaves while holding, stop PTZ
+      const btn = e.target.closest('[data-action^="ptz-"]');
+      if (btn) {
+        const id = btn.dataset.id;
+        window.api.ptz.stop(id).catch(() => {});
+      }
     });
 
     return card;
@@ -338,6 +392,16 @@ const cameraGridUI = {
     if (overlay) {
       overlay.innerHTML = this._buildPlaceholder(status);
       overlay.style.display = status === 'streaming' ? 'none' : 'flex';
+    }
+
+    const ptzPanel = card.querySelector(`[data-camera-ptz="${cameraId}"]`);
+    if (ptzPanel) {
+      const camera = store.cameras.find(c => c.id === cameraId);
+      if (camera && camera.ptzEnabled) {
+        ptzPanel.classList.add('visible');
+      } else {
+        ptzPanel.classList.remove('visible');
+      }
     }
 
     const toggleBtn = card.querySelector('[data-action="start"], [data-action="stop"]');
@@ -474,6 +538,7 @@ const modalController = {
     el.fieldReconnect.value = camera.reconnectInterval ?? 5;
     el.fieldEnabled.checked = camera.enabled !== false;
     el.fieldAudio.checked = camera.audioEnabled === true;
+    if (el.fieldPtz) el.fieldPtz.checked = camera.ptzEnabled === true;
   },
 
   _resetForm() {
@@ -483,6 +548,7 @@ const modalController = {
     el.fieldReconnect.value = '5';
     el.fieldEnabled.checked = true;
     el.fieldAudio.checked = false;
+    if (el.fieldPtz) el.fieldPtz.checked = false;
     el.formError.hidden = true;
   },
 
@@ -513,6 +579,7 @@ const modalController = {
         reconnectInterval: parseInt(el.fieldReconnect.value, 10) || 5,
         enabled: el.fieldEnabled.checked,
         audioEnabled: el.fieldAudio.checked,
+        ptzEnabled: el.fieldPtz ? el.fieldPtz.checked : false,
       };
 
       const id = el.fieldId.value;
@@ -602,6 +669,7 @@ const settingsController = {
       el.settingSnapdir.value = store.settings.snapshotDir || '';
       $('setting-server-port').value = store.settings.webServerPort || 2323;
       $('setting-server-auto').checked = store.settings.webServerEnabled || false;
+      if ($('setting-udp-buffer')) $('setting-udp-buffer').value = store.settings.udpBufferSize || 10485760;
     } catch (err) {
       toast.error('Failed to load settings');
     }
@@ -614,6 +682,7 @@ const settingsController = {
         snapshotDir: el.settingSnapdir.value,
         webServerPort: parseInt($('setting-server-port').value, 10) || 2323,
         webServerEnabled: $('setting-server-auto').checked,
+        udpBufferSize: parseInt($('setting-udp-buffer').value, 10) || 10485760,
       };
       await window.api.storage.saveSettings(settings);
       store.settings = settings;
@@ -699,6 +768,78 @@ const serverController = {
     } else {
       urlEl.textContent = 'Off-line';
       widgetEl.classList.remove('server-status--active');
+    }
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// LOGS CONTROLLER
+// ══════════════════════════════════════════════════════════════════════════
+const logsController = {
+  activeTimer: null,
+  activeCameraId: null,
+
+  init() {
+    el.logsCameraSelect.addEventListener('change', (e) => {
+      this.activeCameraId = e.target.value;
+      el.logsPageOutput.textContent = 'Loading...';
+      this.fetchLogs();
+    });
+  },
+
+  open(cameraId) {
+    this.activeCameraId = cameraId;
+    navController.navigate('logs');
+  },
+
+  onViewDidAppear() {
+    this.populateCameraSelect();
+    if (this.activeCameraId) el.logsCameraSelect.value = this.activeCameraId;
+    else {
+      // Pick first camera if none selected
+      if (store.cameras.length > 0) {
+        this.activeCameraId = store.cameras[0].id;
+        el.logsCameraSelect.value = this.activeCameraId;
+      }
+    }
+    
+    el.logsPageOutput.textContent = 'Loading...';
+    this.fetchLogs();
+    if (!this.activeTimer) {
+      this.activeTimer = setInterval(() => this.fetchLogs(), 2000);
+    }
+  },
+
+  populateCameraSelect() {
+    el.logsCameraSelect.innerHTML = '<option value="" disabled selected>Select a camera</option>';
+    store.cameras.forEach(cam => {
+      const option = document.createElement('option');
+      option.value = cam.id;
+      option.textContent = cam.name;
+      el.logsCameraSelect.appendChild(option);
+    });
+  },
+
+  async fetchLogs() {
+    if (!this.activeCameraId || store.activeView !== 'logs') return;
+    try {
+      const logs = await window.api.stream.getLogs(this.activeCameraId);
+      if (logs && logs.length > 0) {
+        el.logsPageOutput.textContent = logs.join('\n');
+      } else {
+        el.logsPageOutput.textContent = 'No logs available for this session. Is the stream running?';
+      }
+      // auto scroll to bottom
+      el.logsPageOutput.parentElement.scrollTop = el.logsPageOutput.parentElement.scrollHeight;
+    } catch (err) {
+      console.error('Failed to get logs', err);
+    }
+  },
+
+  onViewDidDisappear() {
+    if (this.activeTimer) {
+      clearInterval(this.activeTimer);
+      this.activeTimer = null;
     }
   }
 };
@@ -1057,6 +1198,7 @@ async function init() {
     navController.init();
     gridController.init();
     modalController.init();
+    logsController.init();
     settingsController.init();
     await serverController.init();
     

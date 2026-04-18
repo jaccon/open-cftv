@@ -22,8 +22,15 @@ contextBridge.exposeInMainWorld('api', {
     stopAll: () => ipcRenderer.invoke('stream:stopAll'),
     status: (id) => ipcRenderer.invoke('stream:status', id),
     snapshot: (id) => ipcRenderer.invoke('stream:snapshot', id),
+    getLogs: (id) => ipcRenderer.invoke('stream:getLogs', id),
     startAudio: (id) => ipcRenderer.invoke('stream:startAudio', id),
     stopAudio: (id) => ipcRenderer.invoke('stream:stopAudio', id),
+  },
+
+  // PTZ Control
+  ptz: {
+    move: (id, direction) => ipcRenderer.invoke('ptz:move', id, direction),
+    stop: (id) => ipcRenderer.invoke('ptz:stop', id),
   },
 
   // Storage / settings

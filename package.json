@@ -6,7 +6,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --inspect",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac --x64"
   },
   "keywords": [
     "electron",
@@ -24,13 +25,18 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",
+    "ffmpeg-static": "^5.3.0",
     "fluent-ffmpeg": "^2.1.2",
+    "node-onvif": "^0.1.7",
     "uuid": "^9.0.0"
   },
   "build": {
     "appId": "com.jaccon.rtsp-manager",
     "productName": "RTSP Camera Manager",
     "icon": "assets/images/icon.png",
+    "asarUnpack": [
+      "**/node_modules/ffmpeg-static/**/*"
+    ],
     "mac": {
       "category": "public.app-category.utilities"
     },

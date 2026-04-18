@@ -3,7 +3,11 @@
 const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 
-const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
+let FFMPEG_PATH = require('ffmpeg-static');
+if (FFMPEG_PATH && FFMPEG_PATH.includes('app.asar')) {
+  FFMPEG_PATH = FFMPEG_PATH.replace('app.asar', 'app.asar.unpacked');
+}
+FFMPEG_PATH = process.env.FFMPEG_PATH || FFMPEG_PATH;
 
 /**
  * TalkService manages pushing audio data to RTSP cameras (Backchannel).

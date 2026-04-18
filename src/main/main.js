@@ -8,6 +8,7 @@ const { DatabaseService } = require('./services/databaseService');
 const { ProbeService } = require('./services/probeService');
 const { HttpService } = require('./services/httpService');
 const { AudioStreamService } = require('./services/audioStreamService');
+const { PtzService } = require('./services/ptzService');
 
 // Fix PATH for macOS packaged apps (often missing common brew paths)
 if (process.platform === 'darwin') {
@@ -35,6 +36,7 @@ class Application {
     this.probeService = new ProbeService();
     this.httpService = new HttpService();
     this.audioStreamService = new AudioStreamService();
+    this.ptzService = new PtzService();
   }
 
   /**
@@ -95,6 +97,8 @@ class Application {
     ipcMain.handle('stream:start', async (_, id) => {
       const camera = this.cameraService.getById(id);
       if (!camera) throw new Error(`Camera ${id} not found`);
+      const settings = this.databaseService.getSettings();
+      camera.udpBufferSize = settings.udpBufferSize || 10485760;
       return this.streamService.start(camera, this.mainWindow);
     });
 
@@ -105,8 +109,12 @@ class Application {
     // Snapshot
     ipcMain.handle('stream:snapshot', async (_, id) => {
       const camera = this.cameraService.getById(id);
-      if (!camera) throw new Error(`Camera ${id} not found`);
+      if (!camera) throw new Error('Camera not found');
       return this.streamService.takeSnapshot(camera);
+    });
+
+    ipcMain.handle('stream:getLogs', (_, id) => {
+      return this.streamService.getLogs(id);
     });
 
     // Audio listening Control
@@ -116,6 +124,18 @@ class Application {
       return this.audioStreamService.start(camera, this.mainWindow);
     });
     ipcMain.handle('stream:stopAudio', (_, id) => this.audioStreamService.stop(id));
+
+    // PTZ Controls
+    ipcMain.handle('ptz:move', async (_, id, direction) => {
+      const camera = this.cameraService.getById(id);
+      if (!camera) throw new Error(`Camera ${id} not found`);
+      return this.ptzService.move(camera, direction);
+    });
+    ipcMain.handle('ptz:stop', async (_, id) => {
+      const camera = this.cameraService.getById(id);
+      if (!camera) throw new Error(`Camera ${id} not found`);
+      return this.ptzService.stop(camera);
+    });
 
     // System
     ipcMain.handle('app:selectDirectory', async () => {

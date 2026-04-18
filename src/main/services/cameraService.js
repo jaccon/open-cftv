@@ -82,6 +82,8 @@ class CameraService extends EventEmitter {
       password: data.password || '',
       group: data.group || 'Default',
       enabled: data.enabled !== false,
+      audioEnabled: data.audioEnabled === true,
+      ptzEnabled: data.ptzEnabled === true,
       transport: data.transport || 'tcp',
       codec: data.codec || 'auto',
       reconnectInterval: data.reconnectInterval ?? 5,
