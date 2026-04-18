@@ -74,6 +74,7 @@ const el = {
   fieldEnabled: $('field-enabled'),
   fieldAudio: $('field-audio'),
   fieldPtz: $('field-ptz'),
+  fieldTalk: $('field-talk'),
   // Settings
   settingColumns: $('setting-columns'),
   settingSnapdir: $('setting-snapdir'),
@@ -318,6 +319,9 @@ const cameraGridUI = {
           <button class="icon-btn ${camera.audioEnabled ? '' : 'hidden'}" title="Listen" data-action="listen" data-id="${camera.id}" aria-label="Listen to camera">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
           </button>
+          <button class="icon-btn ${camera.talkEnabled ? '' : 'hidden'}" title="Toggle Mic" data-action="talk" data-id="${camera.id}" aria-label="Toggle talk">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          </button>
           <button class="icon-btn" title="Edit" data-action="edit" data-id="${camera.id}" aria-label="Edit camera">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
@@ -348,6 +352,7 @@ const cameraGridUI = {
       else if (action === 'logs') logsController.open(id);
       else if (action === 'edit') modalController.open(id);
       else if (action === 'listen') listenController.toggleListen(id);
+      else if (action === 'talk') talkController.toggleTalk(id, btn);
     });
 
     // PTZ continuous movement bindings
@@ -373,6 +378,8 @@ const cameraGridUI = {
         window.api.ptz.stop(id).catch(() => {});
       }
     });
+
+
 
     return card;
   },
@@ -539,6 +546,7 @@ const modalController = {
     el.fieldEnabled.checked = camera.enabled !== false;
     el.fieldAudio.checked = camera.audioEnabled === true;
     if (el.fieldPtz) el.fieldPtz.checked = camera.ptzEnabled === true;
+    if (el.fieldTalk) el.fieldTalk.checked = camera.talkEnabled === true;
   },
 
   _resetForm() {
@@ -549,6 +557,7 @@ const modalController = {
     el.fieldEnabled.checked = true;
     el.fieldAudio.checked = false;
     if (el.fieldPtz) el.fieldPtz.checked = false;
+    if (el.fieldTalk) el.fieldTalk.checked = false;
     el.formError.hidden = true;
   },
 
@@ -580,6 +589,7 @@ const modalController = {
         enabled: el.fieldEnabled.checked,
         audioEnabled: el.fieldAudio.checked,
         ptzEnabled: el.fieldPtz ? el.fieldPtz.checked : false,
+        talkEnabled: el.fieldTalk ? el.fieldTalk.checked : false,
       };
 
       const id = el.fieldId.value;
@@ -656,6 +666,46 @@ const cameraController = {
       toast.error(`Failed to load cameras: ${err.message}`);
     }
   },
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// TALK CONTROLLER (TWO-WAY AUDIO)
+// ══════════════════════════════════════════════════════════════════════════
+const talkController = {
+  activeTalks: new Map(), // cameraId -> stream
+
+  async toggleTalk(id, btnElement) {
+    if (this.activeTalks.has(id)) {
+      this.stopTalk(id, btnElement);
+    } else {
+      await this.startTalk(id, btnElement);
+    }
+  },
+
+  async startTalk(id, btnElement) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.activeTalks.set(id, stream);
+      btnElement.classList.add('talk-active');
+      btnElement.style.color = '#ff4d4f';
+      toast.info('Microphone ATIVO e transmitindo para a câmera.', 5000);
+    } catch (err) {
+      toast.error('Acesso ao microfone negado ou não encontrado.');
+    }
+  },
+
+  stopTalk(id, btnElement) {
+    const stream = this.activeTalks.get(id);
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      this.activeTalks.delete(id);
+    }
+    if (btnElement) {
+      btnElement.classList.remove('talk-active');
+      btnElement.style.color = '';
+    }
+    toast.info('Transmissão de microfone encerrada.', 2000);
+  }
 };
 
 // ══════════════════════════════════════════════════════════════════════════

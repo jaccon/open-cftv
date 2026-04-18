@@ -37,6 +37,7 @@ class DatabaseService {
     // Schema migrations for existing databases
     try { this.db.exec(`ALTER TABLE cameras ADD COLUMN audio_enabled INTEGER DEFAULT 0`); } catch (err) {}
     try { this.db.exec(`ALTER TABLE cameras ADD COLUMN ptz_enabled INTEGER DEFAULT 0`); } catch (err) {}
+    try { this.db.exec(`ALTER TABLE cameras ADD COLUMN talk_enabled INTEGER DEFAULT 0`); } catch (err) {}
 
     // Settings table (key-value store)
     this.db.exec(`
@@ -80,14 +81,15 @@ class DatabaseService {
       reconnectInterval: row.reconnect_interval,
       enabled: row.enabled === 1,
       audioEnabled: row.audio_enabled === 1,
-      ptzEnabled: row.ptz_enabled === 1
+      ptzEnabled: row.ptz_enabled === 1,
+      talkEnabled: row.talk_enabled === 1
     }));
   }
 
   saveCamera(camera) {
     const upsert = this.db.prepare(`
-      INSERT INTO cameras (id, name, group_name, rtsp_url, username, password, transport, codec, reconnect_interval, enabled, audio_enabled, ptz_enabled)
-      VALUES (@id, @name, @group, @rtspUrl, @username, @password, @transport, @codec, @reconnectInterval, @enabled, @audioEnabled, @ptzEnabled)
+      INSERT INTO cameras (id, name, group_name, rtsp_url, username, password, transport, codec, reconnect_interval, enabled, audio_enabled, ptz_enabled, talk_enabled)
+      VALUES (@id, @name, @group, @rtspUrl, @username, @password, @transport, @codec, @reconnectInterval, @enabled, @audioEnabled, @ptzEnabled, @talkEnabled)
       ON CONFLICT(id) DO UPDATE SET
         name=excluded.name,
         group_name=excluded.group_name,
@@ -99,13 +101,15 @@ class DatabaseService {
         reconnect_interval=excluded.reconnect_interval,
         enabled=excluded.enabled,
         audio_enabled=excluded.audio_enabled,
-        ptz_enabled=excluded.ptz_enabled
+        ptz_enabled=excluded.ptz_enabled,
+        talk_enabled=excluded.talk_enabled
     `);
     upsert.run({ 
       ...camera, 
       enabled: camera.enabled ? 1 : 0,
       audioEnabled: camera.audioEnabled ? 1 : 0,
-      ptzEnabled: camera.ptzEnabled ? 1 : 0
+      ptzEnabled: camera.ptzEnabled ? 1 : 0,
+      talkEnabled: camera.talkEnabled ? 1 : 0
     });
   }
 

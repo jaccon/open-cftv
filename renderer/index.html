@@ -47,6 +47,15 @@
     }
     .ptz-btn:hover { background: rgba(255,255,255,0.2); }
     .ptz-btn:active { background: var(--clr-primary); }
+    .talk-active {
+      color: var(--clr-danger) !important;
+      animation: pulse-red 1.5s infinite;
+    }
+    @keyframes pulse-red {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    }
   </style>
 </head>
 
@@ -468,6 +477,13 @@
               <input type="checkbox" id="field-ptz" role="switch" />
               <span class="toggle"></span>
               <span>Enable PTZ Controls</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="toggle-label">
+              <input type="checkbox" id="field-talk" role="switch" />
+              <span class="toggle"></span>
+              <span>Enable Mic (Talk)</span>
             </label>
           </div>
         </div>
