@@ -296,9 +296,15 @@ const cameraGridUI = {
         <div class="camera-card__overlay" data-camera-overlay="${camera.id}">
           ${this._buildPlaceholder(status)}
         </div>
-        <div class="camera-card__status-badge" data-camera-badge="${camera.id}">
-          <span class="status-dot status-dot--${status}"></span>
-          <span>${this._statusLabel(status)}</span>
+        <div style="position: absolute; top: var(--space-2); left: var(--space-2); display: flex; gap: 8px; z-index: 10;">
+          <div class="camera-card__status-badge" data-camera-badge="${camera.id}" style="position: relative; top: 0; left: 0;">
+            <span class="status-dot status-dot--${status}"></span>
+            <span>${this._statusLabel(status)}</span>
+          </div>
+          <div class="camera-card__listen-badge" data-camera-listen-badge="${camera.id}" style="background: rgba(255, 77, 79, 0.9); color: white; padding: var(--space-1) var(--space-2); border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 600; display: ${store.activeListenIds.has(camera.id) ? 'flex' : 'none'}; align-items: center; gap: var(--space-1); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(8px); text-transform: uppercase; letter-spacing: 0.05em;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            Listen
+          </div>
         </div>
         <div class="camera-card__fps" data-camera-fps="${camera.id}"></div>
         <div class="camera-card__ptz-controls ${camera.ptzEnabled ? 'visible' : ''}" data-camera-ptz="${camera.id}">
@@ -319,6 +325,7 @@ const cameraGridUI = {
           <button class="icon-btn ${camera.audioEnabled ? '' : 'hidden'}" title="Listen" data-action="listen" data-id="${camera.id}" aria-label="Listen to camera">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
           </button>
+
           <button class="icon-btn ${camera.talkEnabled ? '' : 'hidden'}" title="Toggle Mic" data-action="talk" data-id="${camera.id}" aria-label="Toggle talk">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
           </button>
@@ -910,6 +917,13 @@ const listenController = {
 
   async startListen(cameraId) {
     try {
+      // Stop any other active listening sessions
+      for (const id of Array.from(store.activeListenIds)) {
+        if (id !== cameraId) {
+          await this.stopListen(id);
+        }
+      }
+
       // 1. Start audio stream in Main
       await window.api.stream.startAudio(cameraId);
       
@@ -951,8 +965,11 @@ const listenController = {
     const session = this.activeContexts.get(cameraId);
     if (!session || !session.context) return;
 
-    // audioBuffer is Int16 raw PCM (s16le)
-    const int16 = new Int16Array(audioBuffer);
+    // audioBuffer is a Uint8Array from IPC containing Int16 raw PCM (s16le)
+    // We need to view its underlying buffer as Int16, not copy its elements
+    const byteLen = audioBuffer.byteLength - (audioBuffer.byteLength % 2);
+    const int16 = new Int16Array(audioBuffer.buffer, audioBuffer.byteOffset, byteLen / 2);
+
     const float32 = new Float32Array(int16.length);
     for (let i = 0; i < int16.length; i++) {
       float32[i] = int16[i] / 32768.0;
@@ -981,6 +998,10 @@ const listenController = {
     if (btn) {
       btn.classList.toggle('listen-btn--active', isActive);
       btn.setAttribute('aria-pressed', isActive);
+    }
+    const badge = card.querySelector(`[data-camera-listen-badge="${cameraId}"]`);
+    if (badge) {
+      badge.style.display = isActive ? 'flex' : 'none';
     }
   }
 };

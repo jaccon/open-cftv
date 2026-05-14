@@ -35,9 +35,9 @@ class DatabaseService {
     `);
 
     // Schema migrations for existing databases
-    try { this.db.exec(`ALTER TABLE cameras ADD COLUMN audio_enabled INTEGER DEFAULT 0`); } catch (err) {}
-    try { this.db.exec(`ALTER TABLE cameras ADD COLUMN ptz_enabled INTEGER DEFAULT 0`); } catch (err) {}
-    try { this.db.exec(`ALTER TABLE cameras ADD COLUMN talk_enabled INTEGER DEFAULT 0`); } catch (err) {}
+    try { this.db.exec(`ALTER TABLE cameras ADD COLUMN audio_enabled INTEGER DEFAULT 0`); } catch (err) { }
+    try { this.db.exec(`ALTER TABLE cameras ADD COLUMN ptz_enabled INTEGER DEFAULT 0`); } catch (err) { }
+    try { this.db.exec(`ALTER TABLE cameras ADD COLUMN talk_enabled INTEGER DEFAULT 0`); } catch (err) { }
 
     // Settings table (key-value store)
     this.db.exec(`
@@ -104,8 +104,8 @@ class DatabaseService {
         ptz_enabled=excluded.ptz_enabled,
         talk_enabled=excluded.talk_enabled
     `);
-    upsert.run({ 
-      ...camera, 
+    upsert.run({
+      ...camera,
       enabled: camera.enabled ? 1 : 0,
       audioEnabled: camera.audioEnabled ? 1 : 0,
       ptzEnabled: camera.ptzEnabled ? 1 : 0,
@@ -153,11 +153,11 @@ class DatabaseService {
 
   async importDump(sourcePath) {
     const data = JSON.parse(fs.readFileSync(sourcePath, 'utf8'));
-    
+
     this.db.transaction(() => {
       // Import settings
       if (data.settings) this.saveSettings(data.settings);
-      
+
       // Import cameras
       if (data.cameras) {
         data.cameras.forEach(cam => this.saveCamera(cam));
