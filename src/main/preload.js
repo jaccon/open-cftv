@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('api', {
     getLogs: (id) => ipcRenderer.invoke('stream:getLogs', id),
     startAudio: (id) => ipcRenderer.invoke('stream:startAudio', id),
     stopAudio: (id) => ipcRenderer.invoke('stream:stopAudio', id),
+    saveMotionSnapshot: (id, base64) => ipcRenderer.invoke('stream:saveMotionSnapshot', id, base64),
   },
 
   // PTZ Control

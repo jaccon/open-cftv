@@ -14,6 +14,7 @@ const store = {
   gridCols: 2,
   onlineCount: 0,
   activeListenIds: new Set(), // Set of camera IDs with active audio listening
+  activeMotionIds: new Set(),
 };
 
 // ─── Selectors (DOM refs) ───────────────────────────────────────────────────
@@ -79,6 +80,8 @@ const el = {
   settingColumns: $('setting-columns'),
   settingSnapdir: $('setting-snapdir'),
   btnSnapdir: $('btn-snapdir'),
+  settingMotiondir: $('setting-motiondir'),
+  btnMotiondir: $('btn-motiondir'),
   btnSaveSettings: $('btn-save-settings'),
   // Toast
   toastContainer: $('toast-container'),
@@ -231,6 +234,9 @@ const streamManager = {
       canvas.width = img.naturalWidth || canvas.clientWidth;
       canvas.height = img.naturalHeight || canvas.clientHeight;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      if (typeof motionController !== 'undefined') {
+        motionController.handleFrame(cameraId, canvas);
+      }
     };
     img.src = `data:image/jpeg;base64,${base64}`;
 
@@ -319,6 +325,9 @@ const cameraGridUI = {
           <button class="icon-btn" title="View Logs" data-action="logs" data-id="${camera.id}" aria-label="View Logs">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
           </button>
+          <button class="icon-btn" title="Motion Detection" data-action="motion" data-id="${camera.id}" aria-label="Toggle motion detection" style="${store.activeMotionIds.has(camera.id) ? 'color: var(--clr-primary)' : ''}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          </button>
           <button class="icon-btn" title="Snapshot" data-action="snapshot" data-id="${camera.id}" aria-label="Take snapshot">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
           </button>
@@ -357,6 +366,7 @@ const cameraGridUI = {
       else if (action === 'stop') streamManager.stopStream(id);
       else if (action === 'snapshot') streamManager.takeSnapshot(id);
       else if (action === 'logs') logsController.open(id);
+      else if (action === 'motion') motionController.toggleMotion(id);
       else if (action === 'edit') modalController.open(id);
       else if (action === 'listen') listenController.toggleListen(id);
       else if (action === 'talk') talkController.toggleTalk(id, btn);
@@ -716,6 +726,114 @@ const talkController = {
 };
 
 // ══════════════════════════════════════════════════════════════════════════
+// MOTION CONTROLLER
+// ══════════════════════════════════════════════════════════════════════════
+const motionController = {
+  lastProcessedFrames: new Map(), // cameraId -> ImageData (low res grayscale)
+  lastProcessTime: new Map(),     // cameraId -> timestamp
+  lastSnapshotTime: new Map(),    // cameraId -> timestamp
+  
+  // Configuration
+  checkIntervalMs: 500,           // Process frame max 2 times per second
+  cooldownMs: 5000,               // Wait 5 seconds between motion snapshots
+  threshold: 30,                  // Difference in pixel brightness (0-255) to consider changed
+  pixelFractionThreshold: 0.05,   // What fraction of pixels must change to trigger event
+  processWidth: 64,               // Downscale width
+  processHeight: 48,              // Downscale height
+  
+  toggleMotion(cameraId) {
+    if (store.activeMotionIds.has(cameraId)) {
+      store.activeMotionIds.delete(cameraId);
+      this.lastProcessedFrames.delete(cameraId);
+      this._updateUI(cameraId, false);
+      toast.info('Motion detection disabled');
+    } else {
+      store.activeMotionIds.add(cameraId);
+      this._updateUI(cameraId, true);
+      toast.success('Motion detection enabled');
+    }
+  },
+
+  _updateUI(cameraId, isActive) {
+    const card = el.cameraGrid.querySelector(`[data-camera-id="${cameraId}"]`);
+    if (!card) return;
+    const btn = card.querySelector('[data-action="motion"]');
+    if (btn) {
+      btn.style.color = isActive ? 'var(--clr-primary)' : '';
+      btn.setAttribute('aria-pressed', isActive);
+    }
+  },
+
+  handleFrame(cameraId, originalCanvas) {
+    if (!store.activeMotionIds.has(cameraId)) return;
+    
+    const now = Date.now();
+    const lastCheck = this.lastProcessTime.get(cameraId) || 0;
+    if (now - lastCheck < this.checkIntervalMs) return;
+    this.lastProcessTime.set(cameraId, now);
+
+    // Create offscreen canvas for downscaling
+    if (!this._processCanvas) {
+      this._processCanvas = document.createElement('canvas');
+      this._processCanvas.width = this.processWidth;
+      this._processCanvas.height = this.processHeight;
+      this._processCtx = this._processCanvas.getContext('2d', { willReadFrequently: true });
+    }
+
+    // Downscale current frame
+    this._processCtx.drawImage(originalCanvas, 0, 0, this.processWidth, this.processHeight);
+    const frameData = this._processCtx.getImageData(0, 0, this.processWidth, this.processHeight);
+    
+    // Convert to grayscale
+    const grayscale = new Uint8ClampedArray(this.processWidth * this.processHeight);
+    for (let i = 0; i < grayscale.length; i++) {
+      const idx = i * 4;
+      grayscale[i] = (frameData.data[idx] + frameData.data[idx+1] + frameData.data[idx+2]) / 3;
+    }
+
+    const previousGrayscale = this.lastProcessedFrames.get(cameraId);
+    this.lastProcessedFrames.set(cameraId, grayscale);
+
+    if (previousGrayscale) {
+      let changedPixels = 0;
+      for (let i = 0; i < grayscale.length; i++) {
+        if (Math.abs(grayscale[i] - previousGrayscale[i]) > this.threshold) {
+          changedPixels++;
+        }
+      }
+
+      const fractionChanged = changedPixels / grayscale.length;
+      if (fractionChanged > this.pixelFractionThreshold) {
+        this._onMotionDetected(cameraId, originalCanvas);
+      }
+    }
+  },
+
+  _onMotionDetected(cameraId, canvas) {
+    const now = Date.now();
+    const lastSnap = this.lastSnapshotTime.get(cameraId) || 0;
+    
+    // UI Feedback (flash camera border)
+    const card = el.cameraGrid.querySelector(`[data-camera-id="${cameraId}"]`);
+    if (card) {
+      card.style.boxShadow = '0 0 0 4px var(--clr-primary)';
+      setTimeout(() => { if (card) card.style.boxShadow = ''; }, 500);
+    }
+
+    if (now - lastSnap < this.cooldownMs) return;
+    this.lastSnapshotTime.set(cameraId, now);
+
+    // Save snapshot via backend
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    window.api.stream.saveMotionSnapshot(cameraId, dataUrl).then(filePath => {
+      console.log(`[Motion] Snapshot saved to ${filePath}`);
+    }).catch(err => {
+      console.error('[Motion] Error saving snapshot:', err);
+    });
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════
 // SETTINGS CONTROLLER
 // ══════════════════════════════════════════════════════════════════════════
 const settingsController = {
@@ -724,6 +842,7 @@ const settingsController = {
       store.settings = await window.api.storage.getSettings();
       el.settingColumns.value = store.settings.gridColumns || 2;
       el.settingSnapdir.value = store.settings.snapshotDir || '';
+      if (el.settingMotiondir) el.settingMotiondir.value = store.settings.motionDir || '';
       $('setting-server-port').value = store.settings.webServerPort || 2323;
       $('setting-server-auto').checked = store.settings.webServerEnabled || false;
       if ($('setting-udp-buffer')) $('setting-udp-buffer').value = store.settings.udpBufferSize || 10485760;
@@ -737,8 +856,9 @@ const settingsController = {
       const settings = {
         gridColumns: parseInt(el.settingColumns.value, 10),
         snapshotDir: el.settingSnapdir.value,
-        webServerPort: parseInt($('setting-server-port').value, 10) || 2323,
+        motionDir: el.settingMotiondir ? el.settingMotiondir.value : '',
         webServerEnabled: $('setting-server-auto').checked,
+        webServerPort: parseInt($('setting-server-port').value, 10) || 2323,
         udpBufferSize: parseInt($('setting-udp-buffer').value, 10) || 10485760,
       };
       await window.api.storage.saveSettings(settings);
@@ -755,6 +875,12 @@ const settingsController = {
       const dir = await window.api.app.selectDirectory();
       if (dir) el.settingSnapdir.value = dir;
     });
+    if (el.btnMotiondir) {
+      el.btnMotiondir.addEventListener('click', async () => {
+        const dir = await window.api.app.selectDirectory();
+        if (dir) el.settingMotiondir.value = dir;
+      });
+    }
 
     $('btn-export-settings').addEventListener('click', () => this.export());
     $('btn-import-settings').addEventListener('click', () => this.import());

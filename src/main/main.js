@@ -117,6 +117,20 @@ class Application {
       return this.streamService.getLogs(id);
     });
 
+    // Motion Detection
+    ipcMain.handle('stream:saveMotionSnapshot', async (_, id, base64Data) => {
+      const settings = this.databaseService.getSettings();
+      const outputDir = settings.motionDir || settings.snapshotDir || require('os').tmpdir();
+      if (!require('fs').existsSync(outputDir)) {
+        require('fs').mkdirSync(outputDir, { recursive: true });
+      }
+      const fileName = `motion_${id}_${Date.now()}.jpg`;
+      const filePath = path.join(outputDir, fileName);
+      const base64Image = base64Data.replace(/^data:image\/jpeg;base64,/, "");
+      require('fs').writeFileSync(filePath, base64Image, 'base64');
+      return filePath;
+    });
+
     // Audio listening Control
     ipcMain.handle('stream:startAudio', async (_, id) => {
       const camera = this.cameraService.getById(id);
